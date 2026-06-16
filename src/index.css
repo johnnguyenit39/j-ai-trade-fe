@@ -56,6 +56,134 @@ body {
   letter-spacing: 0.05em;
 }
 
+.chat__spacer {
+  flex: 1;
+}
+
+.chat__user {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat__logout {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat__logout:hover {
+  border-color: var(--user);
+}
+
+/* Loading + auth screens */
+.loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--user);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 24px;
+}
+
+.auth__title {
+  margin: 0;
+  font-size: 22px;
+  text-align: center;
+}
+
+.auth__subtitle {
+  margin: 0 0 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.auth__input {
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.auth__input:focus {
+  border-color: var(--user);
+}
+
+.auth__btn {
+  margin-top: 4px;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: var(--user);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth__switch {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.auth__switch:hover {
+  color: var(--text);
+}
+
+.auth__error {
+  color: #fca5a5;
+  font-size: 13px;
+  text-align: center;
+}
+
 .chat__messages {
   flex: 1;
   overflow-y: auto;
@@ -69,6 +197,27 @@ body {
   margin: auto;
   color: var(--muted);
   font-size: 14px;
+}
+
+.chat__loadmore {
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat__loadmore:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--user);
+}
+
+.chat__loadmore:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .bubble {

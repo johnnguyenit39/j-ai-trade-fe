@@ -1,12 +1,10 @@
 rules_version = '2';
 
-// ⚠️ PROTOTYPE RULES — no auth. Anyone with the web config can read/write the
-// single shared session. Fine for a solo prototype; lock this down (require
-// auth + scope by uid) before exposing the app publicly.
+// Per-user data: a signed-in user can only read/write their own documents.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /sessions/{sessionId}/{document=**} {
-      allow read, write: if true;
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
   }
 }

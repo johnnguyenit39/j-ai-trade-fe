@@ -14,8 +14,15 @@ export function buildMessagesWithMarket(
   history: ChatMessage[],
   userMessage: string,
   marketBlob: string,
+  memory = '',
 ): ChatMessage[] {
-  const msgs: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...history]
+  const msgs: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+  // Long-term memory as a leading user turn (kept out of system so the system
+  // prompt stays cache-friendly; memory changes every turn).
+  if (memory.trim() !== '') {
+    msgs.push({ role: 'user', content: `[MEMORY]\n${memory.trim()}\n[/MEMORY]` })
+  }
+  msgs.push(...history)
   if (marketBlob !== '') msgs.push({ role: 'user', content: marketBlob })
   msgs.push({ role: 'user', content: userMessage })
   return msgs

@@ -4,13 +4,18 @@ import { buildMessagesWithMarket, WELCOME_MESSAGE } from '../ai/trading/messages
 import { extractDecision } from '../ai/trading/decisionParser'
 import { stripLLMEmphasis, stripMarketDataDump } from '../ai/trading/textClean'
 import { formatAdvisorReplyForUser, type FreshnessContext } from '../ai/trading/tradeCard'
+import { updateMemory } from '../ai/trading/memory'
 import { maybeEnrich } from '../trading/advisor'
 import {
   appendMessage,
   getLastSymbol,
-  loadMessages,
+  getMemory,
+  loadOlderMessages,
+  loadRecentMessages,
   saveDecision,
   setLastSymbol,
+  setMemory,
+  type MessageCursor,
 } from '../store/sessionStore'
 
 export interface UIMessage extends ChatMessage {
@@ -19,6 +24,11 @@ export interface UIMessage extends ChatMessage {
   // and never persisted, matching the Go backend's separate-send welcome.
   transient?: boolean
 }
+
+// How many recent turns we feed the model. Older context is carried by `memory`
+// (a running summary), so we keep the prompt bounded no matter how long the
+// conversation grows.
+const MODEL_HISTORY_TURNS = 12
 
 let idCounter = 0
 const nextId = () => `m${++idCounter}`
@@ -35,20 +45,33 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   // Pinned symbol so follow-ups ("giờ bao nhiêu") re-fetch the same pair.
   const lastSymbolRef = useRef<string>('')
+  // Running conversation memory the LLM maintains.
+  const memoryRef = useRef<string>('')
+  // Pagination cursor for loading older messages.
+  const cursorRef = useRef<MessageCursor>(null)
 
-  // Hydrate persisted history + pinned symbol on mount.
+  // Hydrate the latest page + pinned symbol + memory on mount.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [history, lastSymbol] = await Promise.all([loadMessages(), getLastSymbol()])
+      const [page, lastSymbol, memory] = await Promise.all([
+        loadRecentMessages(),
+        getLastSymbol(),
+        getMemory(),
+      ])
       if (cancelled) return
       lastSymbolRef.current = lastSymbol
+      memoryRef.current = memory
+      cursorRef.current = page.cursor
+      setHasMore(page.hasMore)
       setMessages(
-        history.length > 0
-          ? history.map((m) => ({ id: nextId(), role: m.role, content: m.content }))
+        page.messages.length > 0
+          ? page.messages.map((m) => ({ id: nextId(), role: m.role, content: m.content }))
           : [welcomeMsg()],
       )
     })().catch(() => {
@@ -58,6 +81,26 @@ export function useChat() {
       cancelled = true
     }
   }, [])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const page = await loadOlderMessages(cursorRef.current)
+      cursorRef.current = page.cursor
+      setHasMore(page.hasMore)
+      if (page.messages.length > 0) {
+        const older = page.messages.map((m) => ({
+          id: nextId(),
+          role: m.role,
+          content: m.content,
+        }))
+        setMessages((prev) => [...older, ...prev])
+      }
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore])
 
   const stop = useCallback(() => {
     abortRef.current?.abort()
@@ -73,11 +116,12 @@ export function useChat() {
       const controller = new AbortController()
       abortRef.current = controller
 
-      // History sent to the model = prior NON-transient turns only (system
-      // prompt + market blob are added by buildMessagesWithMarket; neither is
-      // persisted, and the welcome greeting is excluded).
+      // History sent to the model = last N non-transient turns (memory carries
+      // the rest). System prompt, memory, and market blob are added by
+      // buildMessagesWithMarket; none of those are persisted.
       const history: ChatMessage[] = messages
         .filter((m) => !m.transient)
+        .slice(-MODEL_HISTORY_TURNS)
         .map(({ role, content }) => ({ role, content }))
       const userMsg: UIMessage = { id: nextId(), role: 'user', content }
       setMessages((prev) => [...prev, userMsg])
@@ -117,7 +161,7 @@ export function useChat() {
       let raw = ''
       try {
         const handler = getHandler()
-        const msgs = buildMessagesWithMarket(history, content, digest)
+        const msgs = buildMessagesWithMarket(history, content, digest, memoryRef.current)
         await handler.streamChat(msgs, {
           signal: controller.signal,
           onToken: (token) => {
@@ -143,7 +187,6 @@ export function useChat() {
         )
 
         // Persist the turn pair (only on a non-empty reply, like the backend).
-        // Cleaned text only — never the market digest.
         if (finalText !== '') {
           try {
             await appendMessage('user', content)
@@ -152,6 +195,16 @@ export function useChat() {
           } catch (perr) {
             console.warn('persist failed (non-fatal)', perr)
           }
+
+          // Update conversation memory in the background (extra LLM call).
+          updateMemory(handler, memoryRef.current, content, finalText)
+            .then((next) => {
+              if (next !== memoryRef.current) {
+                memoryRef.current = next
+                setMemory(next).catch(() => {})
+              }
+            })
+            .catch(() => {})
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return
@@ -167,5 +220,5 @@ export function useChat() {
     [messages, isStreaming],
   )
 
-  return { messages, isStreaming, status, error, send, stop }
+  return { messages, isStreaming, status, error, hasMore, loadingMore, loadMore, send, stop }
 }

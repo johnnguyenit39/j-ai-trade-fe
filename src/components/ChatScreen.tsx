@@ -1,17 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat'
 import { ACTIVE_PROVIDER } from '../ai'
+import { useAuth } from '../auth/AuthContext'
 
 export function ChatScreen() {
-  const { messages, isStreaming, status, error, send, stop } = useChat()
+  const { messages, isStreaming, status, error, hasMore, loadingMore, loadMore, send, stop } =
+    useChat()
+  const { user, logout, configured } = useAuth()
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Skip the auto-scroll-to-bottom once when older messages are prepended.
+  const skipScrollRef = useRef(false)
 
-  // Auto-scroll to the latest message.
+  // Auto-scroll to the latest message (but not when loading older history).
   useEffect(() => {
+    if (skipScrollRef.current) {
+      skipScrollRef.current = false
+      return
+    }
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  const handleLoadMore = () => {
+    skipScrollRef.current = true
+    loadMore()
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,9 +46,28 @@ export function ChatScreen() {
       <header className="chat__header">
         <span className="chat__title">J AI Trade</span>
         <span className="chat__provider">{ACTIVE_PROVIDER}</span>
+        <span className="chat__spacer" />
+        {configured && user && (
+          <>
+            <span className="chat__user">{user.email}</span>
+            <button className="chat__logout" type="button" onClick={() => logout()}>
+              Đăng xuất
+            </button>
+          </>
+        )}
       </header>
 
       <div className="chat__messages" ref={scrollRef}>
+        {hasMore && (
+          <button
+            type="button"
+            className="chat__loadmore"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Đang tải…' : 'Tải thêm tin cũ'}
+          </button>
+        )}
         {messages.length === 0 && (
           <div className="chat__empty">Ask me anything to get started.</div>
         )}

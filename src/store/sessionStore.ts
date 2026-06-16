@@ -16,57 +16,111 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit as fbLimit,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
   writeBatch,
+  type DocumentData,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore'
-import { db } from '../firebase'
+import { auth, db } from '../firebase'
 import type { ChatRole } from '../ai'
 import type { DecisionPayload } from '../ai/trading/decisionParser'
-
-const SESSION_ID = 'default'
 
 export interface StoredMessage {
   role: ChatRole
   content: string
 }
 
-const sessionDoc = () => doc(db!, 'sessions', SESSION_ID)
-const messagesCol = () => collection(db!, 'sessions', SESSION_ID, 'messages')
-const decisionsCol = () => collection(db!, 'sessions', SESSION_ID, 'decisions')
+// Data is scoped per authenticated user: users/{uid}/...
+// `ready()` gates every call on both Firestore config and a signed-in user.
+const uid = () => auth?.currentUser?.uid ?? null
+const ready = (): boolean => Boolean(db && uid())
 
-/** Loads the full rolling history (oldest → newest). */
-export async function loadMessages(): Promise<StoredMessage[]> {
-  if (!db) return []
-  const snap = await getDocs(query(messagesCol(), orderBy('createdAt', 'asc')))
-  return snap.docs.map((d) => {
-    const data = d.data() as { role: ChatRole; content: string }
-    return { role: data.role, content: data.content }
-  })
+const userDoc = () => doc(db!, 'users', uid()!)
+const messagesCol = () => collection(db!, 'users', uid()!, 'messages')
+const decisionsCol = () => collection(db!, 'users', uid()!, 'decisions')
+
+/** Opaque cursor for paginating older messages (newest-first internally). */
+export type MessageCursor = QueryDocumentSnapshot<DocumentData> | null
+
+export interface MessagePage {
+  /** Oldest → newest, ready to render. */
+  messages: StoredMessage[]
+  /** Pass back to loadOlderMessages to fetch the next older page. */
+  cursor: MessageCursor
+  /** Whether more (older) messages exist beyond this page. */
+  hasMore: boolean
+}
+
+const DEFAULT_PAGE = 20
+
+// Fetches `size` newest messages before `after` (exclusive). We over-fetch by
+// one to detect whether an older page exists, then trim and reverse to asc.
+async function fetchPage(size: number, after: MessageCursor): Promise<MessagePage> {
+  if (!ready()) return { messages: [], cursor: null, hasMore: false }
+  const clauses: QueryConstraint[] = [orderBy('createdAt', 'desc')]
+  if (after) clauses.push(startAfter(after))
+  clauses.push(fbLimit(size + 1))
+  const snap = await getDocs(query(messagesCol(), ...clauses))
+  const hasMore = snap.docs.length > size
+  const docs = snap.docs.slice(0, size) // newest → oldest
+  const cursor = docs.length ? docs[docs.length - 1] : after
+  const messages = docs
+    .map((d) => {
+      const data = d.data() as { role: ChatRole; content: string }
+      return { role: data.role, content: data.content }
+    })
+    .reverse() // → oldest → newest for display
+  return { messages, cursor, hasMore }
+}
+
+/** Loads the most recent page (newest messages). */
+export function loadRecentMessages(size = DEFAULT_PAGE): Promise<MessagePage> {
+  return fetchPage(size, null)
+}
+
+/** Loads the next older page, given the cursor from a previous page. */
+export function loadOlderMessages(cursor: MessageCursor, size = DEFAULT_PAGE): Promise<MessagePage> {
+  return fetchPage(size, cursor)
 }
 
 /** Appends one turn. We persist only cleaned text (never the market digest). */
 export async function appendMessage(role: ChatRole, content: string): Promise<void> {
-  if (!db) return
+  if (!ready()) return
   await addDoc(messagesCol(), { role, content, createdAt: serverTimestamp() })
 }
 
 export async function getLastSymbol(): Promise<string> {
-  if (!db) return ''
-  const snap = await getDoc(sessionDoc())
+  if (!ready()) return ''
+  const snap = await getDoc(userDoc())
   return (snap.data()?.lastSymbol as string) ?? ''
 }
 
 export async function setLastSymbol(symbol: string): Promise<void> {
-  if (!db) return
-  await setDoc(sessionDoc(), { lastSymbol: symbol, updatedAt: serverTimestamp() }, { merge: true })
+  if (!ready()) return
+  await setDoc(userDoc(), { lastSymbol: symbol, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+/** Conversation memory: a compact running summary the LLM maintains. */
+export async function getMemory(): Promise<string> {
+  if (!ready()) return ''
+  const snap = await getDoc(userDoc())
+  return (snap.data()?.memory as string) ?? ''
+}
+
+export async function setMemory(memory: string): Promise<void> {
+  if (!ready()) return
+  await setDoc(userDoc(), { memory, updatedAt: serverTimestamp() }, { merge: true })
 }
 
 /** Persists a parsed trade decision (the agent_decisions equivalent). */
 export async function saveDecision(d: DecisionPayload): Promise<void> {
-  if (!db) return
+  if (!ready()) return
   await addDoc(decisionsCol(), {
     symbol: d.symbol,
     action: d.action,
@@ -82,10 +136,10 @@ export async function saveDecision(d: DecisionPayload): Promise<void> {
 
 /** Clears the rolling history and pinned symbol (used by /reset). */
 export async function clearSession(): Promise<void> {
-  if (!db) return
+  if (!ready()) return
   const snap = await getDocs(messagesCol())
-  const batch = writeBatch(db)
+  const batch = writeBatch(db!)
   snap.docs.forEach((d) => batch.delete(d.ref))
-  batch.set(sessionDoc(), { lastSymbol: '', updatedAt: serverTimestamp() }, { merge: true })
+  batch.set(userDoc(), { lastSymbol: '', updatedAt: serverTimestamp() }, { merge: true })
   await batch.commit()
 }

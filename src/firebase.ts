@@ -8,6 +8,7 @@
 
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getAuth, type Auth } from 'firebase/auth'
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -22,12 +23,17 @@ export const isFirebaseConfigured = Boolean(config.apiKey && config.projectId)
 
 let app: FirebaseApp | null = null
 let firestore: Firestore | null = null
+let firebaseAuth: Auth | null = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(config)
   firestore = getFirestore(app)
+  // Default persistence is local (survives reload/close) → returning users
+  // auto-login.
+  firebaseAuth = getAuth(app)
 } else {
   console.info('Firebase not configured (VITE_FIREBASE_*) — running in-memory, no persistence.')
 }
 
 export const db = firestore
+export const auth = firebaseAuth
