@@ -11,7 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: flutter clean && flutter pub get && flutter build web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci && npm run build
+        env:
+          VITE_AI_AGENT_TOKEN_KEY: ${{ secrets.VITE_AI_AGENT_TOKEN_KEY }}
+          VITE_AI_PROVIDER: deepseek
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
