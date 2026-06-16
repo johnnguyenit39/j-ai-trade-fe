@@ -35,7 +35,9 @@ export function ChatScreen() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Ignore Enter while an IME composition is active (e.g. Vietnamese input),
+    // otherwise the last composed word gets re-inserted after we clear the box.
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       handleSubmit(e)
     }

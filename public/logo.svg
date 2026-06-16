@@ -1,0 +1,39 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1f2530"/>
+      <stop offset="1" stop-color="#0d0f13"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="150" y1="120" x2="380" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fde68a"/>
+      <stop offset="0.5" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- antenna + gold coin -->
+  <line x1="256" y1="170" x2="256" y2="120" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="256" cy="104" r="22" fill="url(#gold)"/>
+  <path d="M256 95 L263 105 L258 105 L258 114 L254 114 L254 105 L249 105 Z" fill="#0d0f13"/>
+
+  <!-- ears -->
+  <rect x="120" y="250" width="28" height="62" rx="13" fill="url(#gold)"/>
+  <rect x="364" y="250" width="28" height="62" rx="13" fill="url(#gold)"/>
+
+  <!-- robot head -->
+  <rect x="144" y="166" width="224" height="204" rx="48" fill="url(#gold)"/>
+
+  <!-- visor -->
+  <rect x="170" y="212" width="172" height="78" rx="26" fill="#0d0f13" opacity="0.92"/>
+  <!-- glowing gold eyes -->
+  <rect x="194" y="234" width="46" height="34" rx="12" fill="url(#gold)"/>
+  <rect x="272" y="234" width="46" height="34" rx="12" fill="url(#gold)"/>
+
+  <!-- mouth = ascending candlestick chart (bottom-aligned at y=346) -->
+  <rect x="196" y="332" width="20" height="14" rx="5" fill="#0d0f13"/>
+  <rect x="224" y="322" width="20" height="24" rx="5" fill="#0d0f13"/>
+  <rect x="252" y="312" width="20" height="34" rx="5" fill="#0d0f13"/>
+  <rect x="280" y="300" width="20" height="46" rx="5" fill="#0d0f13"/>
+</svg>
